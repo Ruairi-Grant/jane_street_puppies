@@ -96,6 +96,80 @@ def analyze_players_for_river(players_df, river_cards):
     results.sort(key=lambda x: x['improvement'], reverse=True)
     return results
 
+# Validate river against player evaluations
+def validate_river_against_evaluations(players_df, river_cards):
+    """
+    Check if a river combination is valid based on player evaluations.
+    Valid if: players with no improvement are sad (-1) and players with improvement are happy (1)
+    Players with 0 evaluation are neutral/unknown
+    """
+    analysis = analyze_players_for_river(players_df, river_cards)
+    
+    # Create lookup for player evaluations
+    player_evaluations = {}
+    for _, row in players_df.iterrows():
+        player_evaluations[row["Player No"]] = row["Estimation"]
+    
+    conflicts = []
+    matches = []
+    neutral_count = 0
+    
+    for result in analysis:
+        player_no = result['player_no']
+        improvement = result['improvement']
+        evaluation = player_evaluations[player_no]
+        
+        # Determine if player improved (improvement > 0)
+        improved = improvement > 0
+        
+        if evaluation == 0:
+            # Neutral/unknown player
+            neutral_count += 1
+        elif evaluation == 1:
+            # Happy player - should have improvement
+            if improved:
+                matches.append(f"Player {player_no}: Happy & Improved (+{improvement})")
+            else:
+                conflicts.append(f"Player {player_no}: Happy but NO improvement ({improvement})")
+        elif evaluation == -1:
+            # Sad player - should have no improvement
+            if not improved:
+                matches.append(f"Player {player_no}: Sad & No improvement ({improvement})")
+            else:
+                conflicts.append(f"Player {player_no}: Sad but IMPROVED (+{improvement})")
+    
+    is_valid = len(conflicts) == 0
+    
+    return {
+        'is_valid': is_valid,
+        'conflicts': conflicts,
+        'matches': matches,
+        'neutral_count': neutral_count,
+        'analysis': analysis
+    }
+
+# Find all valid rivers
+def find_valid_rivers(players_df, river_combos, max_to_check=1000):
+    """Find river combinations that match the player evaluations"""
+    valid_rivers = []
+    
+    print(f"Checking first {min(max_to_check, len(river_combos))} river combinations...")
+    
+    for i, river in enumerate(river_combos[:max_to_check]):
+        if i % 10000 == 0:
+            print(f"Checked {i:,} rivers, found {len(valid_rivers)} valid so far...")
+            
+        validation = validate_river_against_evaluations(players_df, list(river))
+        
+        if validation['is_valid']:
+            valid_rivers.append({
+                'river': list(river),
+                'validation': validation
+            })
+    
+    print(f"Found {len(valid_rivers)} valid rivers out of {min(max_to_check, len(river_combos))} checked")
+    return valid_rivers
+
 # --- Step 1: Build a deck ---
 suits = ["s", "h", "d", "c"]  # Spades, Hearts, Diamonds, Clubs (lowercase to match CSV)
 ranks = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "3", "2"]
@@ -187,4 +261,73 @@ if __name__ == "__main__":
               f"(Player {best['player_no']}), "
               f"Worst {worst['improvement']:+d} (Player {worst['player_no']}), "
               f"Range: {improvement_range}")
+    
+    # --- Step 6: Validate sample river against player evaluations ---
+    print(f"\n--- Validation for sample river: {river} ---")
+    validation = validate_river_against_evaluations(players_df, river)
+    
+    print(f"River is {'VALID' if validation['is_valid'] else 'INVALID'}")
+    print(f"Conflicts: {len(validation['conflicts'])}")
+    for conflict in validation['conflicts']:
+        print(f"  ❌ {conflict}")
+    
+    print(f"Matches: {len(validation['matches'])}")
+    for match in validation['matches']:
+        print(f"  ✅ {match}")
+    
+    if validation['neutral_count'] > 0:
+        print(f"Neutral players (evaluation=0): {validation['neutral_count']}")
+    
+    # --- Step 7: Debug a specific river from the middle ---
+    print("\n--- Analyzing ONE specific river from middle of list ---")
+    
+    # Pick a river from the middle of the list
+    middle_index = len(river_combos) // 2
+    debug_river = list(river_combos[middle_index])
+    print(f"Debug river (index {middle_index}): {debug_river}")
+    
+    print("\n--- Player evaluations from CSV ---")
+    for _, row in players_df.iterrows():
+        print(f"Player {row['Player No']}: {row['Card 1']}, {row['Card 2']} -> Estimation: {row['Estimation']}")
+    
+    print(f"\n--- Detailed analysis for river {debug_river} ---")
+    analysis_results = analyze_players_for_river(players_df, debug_river)
+    
+    for result in analysis_results:
+        player_no = result['player_no']
+        player_evaluation = players_df[players_df['Player No'] == player_no]['Estimation'].iloc[0]
+        improvement = result['improvement']
+        improved = improvement > 0
+        
+        print(f"Player {player_no}: {result['player_cards']}")
+        print(f"  -> {result['hand_type']} (score: {result['player_score']})")
+        print(f"  -> Improvement: {improvement:+d} (improved: {improved})")
+        print(f"  -> CSV evaluation: {player_evaluation}")
+        
+        # Check validation logic
+        if player_evaluation == 1:
+            status = "✅ MATCH" if improved else "❌ CONFLICT (happy but no improvement)"
+        elif player_evaluation == -1:
+            status = "✅ MATCH" if not improved else "❌ CONFLICT (sad but improved)"
+        else:
+            status = "⚪ NEUTRAL (evaluation = 0)"
+        print(f"  -> Validation: {status}")
+        print()
+    
+    print("--- Full validation check ---")
+    validation = validate_river_against_evaluations(players_df, debug_river)
+    print(f"Is valid: {validation['is_valid']}")
+    print(f"Conflicts: {len(validation['conflicts'])}")
+    print(f"Matches: {len(validation['matches'])}")
+    print(f"Neutral count: {validation['neutral_count']}")
+    
+    if validation['is_valid']:
+        print("🎉 This river is VALID!")
+    else:
+        print("❌ This river is INVALID")
+        print("Conflict details:")
+        for conflict in validation['conflicts']:
+            print(f"  - {conflict}")
+    
+    print(f"\nRiver baseline (5-card): {hand_class(debug_river)} (score: {evaluate_hand(debug_river)})")
 
