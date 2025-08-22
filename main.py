@@ -42,4 +42,4 @@ if __name__ == "__main__":
 
     print("Known cards:", table["known_cards"])
     print("Unknown slots:", table["unknowns"])
-    print("Remaining deck (available):", table["remaining_deck"]git )
+    print("Remaining deck (available):", table["remaining_deck"])
