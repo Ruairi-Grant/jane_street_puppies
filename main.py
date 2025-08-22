@@ -69,6 +69,7 @@ def check_hand_improvement(player_cards, river_cards):
     }
 
 # Analyze all players for a given river
+# Analyze all players for a given river
 def analyze_players_for_river(players_df, river_cards):
     """Analyze how each player performs with the given river cards"""
     results = []
@@ -76,6 +77,10 @@ def analyze_players_for_river(players_df, river_cards):
     for _, player_row in players_df.iterrows():
         player_cards = [str(player_row["Card 1"]).strip(), str(player_row["Card 2"]).strip()]
         player_no = player_row["Player No"]
+        
+        # Skip players with unknown cards
+        if '??' in player_cards:
+            continue
         
         improvement_data = check_hand_improvement(player_cards, river_cards)
         
